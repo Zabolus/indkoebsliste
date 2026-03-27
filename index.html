@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Indkøbsliste</title>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --primary: #4CAF82;
+      --primary-dark: #3a9e6f;
+      --accent: #FF7043;
+      --text: #2d3748;
+      --muted: #718096;
+      --border: #e2e8f0;
+      --checked-bg: #f0faf5;
+      --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, #38a169 100%);
+      color: white;
+      padding: 20px 16px 16px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p { font-size: 0.85rem; opacity: 0.85; margin-top: 3px; }
+
+    .tabs {
+      display: flex;
+      background: white;
+      border-bottom: 2px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 13px 8px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .page { display: none; padding: 16px; max-width: 640px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* --- INDKØBSLISTE --- */
+    .summary-bar {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .summary-bar .stat { text-align: center; }
+    .summary-bar .stat-val { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
+    .summary-bar .stat-lbl { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .input-row input {
+      flex: 1;
+      padding: 11px 14px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-row input:focus { border-color: var(--primary); }
+    .btn {
+      padding: 11px 18px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--primary-dark); }
+    .btn:active { transform: scale(0.97); }
+    .btn.secondary {
+      background: white;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+    .btn.secondary:hover { background: #f0faf5; }
+    .btn.danger { background: #FC8181; }
+    .btn.danger:hover { background: #f56565; }
+
+    .import-area {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .import-area h3 { font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .import-area textarea {
+      width: 100%;
+      height: 90px;
+      padding: 10px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      resize: vertical;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .import-area textarea:focus { border-color: var(--primary); }
+    .import-area .import-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+    .list-header h3 { font-size: 0.88rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .list-header .actions { display: flex; gap: 6px; }
+
+    .item-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .item {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: opacity 0.2s, background 0.2s;
+      animation: slideIn 0.2s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .item.checked {
+      background: var(--checked-bg);
+      opacity: 0.7;
+    }
+    .item.checked .item-name {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+
+    .item-checkbox {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: white;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      font-size: 13px;
+    }
+    .item-checkbox.checked {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .item-body { flex: 1; min-width: 0; }
+    .item-name { font-size: 0.95rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-qty { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
+
+    .item-price-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .item-price-wrap input {
+      width: 72px;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 0.85rem;
+      text-align: right;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .item-price-wrap input:focus { border-color: var(--primary); }
+    .item-price-wrap span { font-size: 0.78rem; color: var(--muted); }
+
+    .item-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #CBD5E0;
+      font-size: 1.1rem;
+      padding: 2px 4px;
+      border-radius: 5px;
+      transition: color 0.2s;
+      flex-shrink: 0;
+    }
+    .item-del:hover { color: var(--accent); }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    .empty-state .emoji { font-size: 3rem; margin-bottom: 10px; }
+    .empty-state p { font-size: 0.9rem; }
+
+    /* --- TIPS --- */
+    .tips-grid { display: flex; flex-direction: column; gap: 14px; }
+
+    .tip-card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      border-left: 4px solid var(--primary);
+    }
+    .tip-card.orange { border-left-color: #ED8936; }
+    .tip-card.blue   { border-left-color: #4299E1; }
+    .tip-card.purple { border-left-color: #9F7AEA; }
+    .tip-card.red    { border-left-color: #FC8181; }
+    .tip-card.teal   { border-left-color: #38B2AC; }
+
+    .tip-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .tip-card ul {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .tip-card li { font-size: 0.88rem; color: #4a5568; line-height: 1.45; }
+
+    .tip-add-card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+      border: 2px dashed var(--border);
+    }
+    .tip-add-card h3 { font-size: 0.9rem; color: var(--muted); margin-bottom: 10px; }
+    .tip-add-card input, .tip-add-card textarea {
+      width: 100%;
+      padding: 9px 12px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .tip-add-card input:focus, .tip-add-card textarea:focus { border-color: var(--primary); }
+    .tip-add-card textarea { height: 70px; resize: vertical; }
+
+    .custom-tip {
+      background: #fff8e1;
+      border-left-color: #F6AD55;
+    }
+
+    /* Progress bar */
+    .progress-wrap { margin-top: 6px; }
+    .progress-bar-bg {
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), #68D391);
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+    .progress-lbl { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+    /* section divider */
+    .section-divider {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--muted);
+      padding: 6px 4px 4px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 Indkøbsliste</h1>
+  <p>Hold styr på varerne &amp; budgettet</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('liste')">📋 Liste</button>
+  <button class="tab-btn" onclick="showTab('tips')">💡 Tips</button>
+</div>
+
+<!-- ===== LISTE ===== -->
+<div id="tab-liste" class="page active">
+
+  <div class="summary-bar">
+    <div class="stat">
+      <div class="stat-val" id="stat-total">0</div>
+      <div class="stat-lbl">Varer i alt</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="stat-checked">0</div>
+      <div class="stat-lbl">I kurven</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="stat-price">0 kr</div>
+      <div class="stat-lbl">Est. pris</div>
+    </div>
+    <div class="progress-wrap" style="width:100%">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-lbl" id="progress-lbl">0 af 0 varer i kurven</div>
+    </div>
+  </div>
+
+  <div class="input-row">
+    <input type="text" id="new-item" placeholder="Tilføj vare..." onkeydown="if(event.key==='Enter') addItem()" />
+    <button class="btn" onclick="addItem()">Tilføj</button>
+  </div>
+
+  <div class="import-area">
+    <h3>Importer liste</h3>
+    <textarea id="import-text" placeholder="Indsæt en liste her, én vare pr. linje:&#10;2 liter mælk&#10;Æbler&#10;Rugbrød&#10;..."></textarea>
+    <div class="import-actions">
+      <button class="btn" onclick="importList()">Importer</button>
+      <button class="btn secondary" onclick="document.getElementById('import-text').value=''">Ryd</button>
+    </div>
+  </div>
+
+  <div class="list-header">
+    <h3>Varer (<span id="item-count">0</span>)</h3>
+    <div class="actions">
+      <button class="btn secondary" style="padding:6px 12px;font-size:0.8rem" onclick="clearChecked()">Fjern afkrydsede</button>
+      <button class="btn danger" style="padding:6px 12px;font-size:0.8rem" onclick="clearAll()">Ryd alt</button>
+    </div>
+  </div>
+
+  <div id="item-list" class="item-list"></div>
+  <div id="empty-state" class="empty-state">
+    <div class="emoji">🛒</div>
+    <p>Ingen varer endnu.<br>Tilføj varer eller importer en liste.</p>
+  </div>
+</div>
+
+<!-- ===== TIPS ===== -->
+<div id="tab-tips" class="page">
+  <div class="tips-grid">
+
+    <div class="tip-card">
+      <h3>🥦 Slanke indkøbstips</h3>
+      <ul>
+        <li>Shop aldrig på tom mave — det øger impulsive køb med op til 64%</li>
+        <li>Hold dig til yderkanten af butikken: frugt, grønt, protein og mejeri</li>
+        <li>Vælg varer med max 5 ingredienser på etiketten</li>
+        <li>Erstat hvid pasta/ris med fuldkorns- eller bælgfrugts-versioner</li>
+        <li>Læg altid grøntsager øverst i kurven — de "former" resten af listen</li>
+        <li>Køb frosne grøntsager: lige så næringsrige og halvt så dyre</li>
+      </ul>
+    </div>
+
+    <div class="tip-card orange">
+      <h3>🍬 Undgå slik-trang</h3>
+      <ul>
+        <li>Spis et protein-rigt måltid <em>inden</em> du handler — protein dæmper sukkertrang</li>
+        <li>Tag ikke med ned ad slik-gangen; tag en alternativ rute</li>
+        <li>Har du slik-trang i butikken? Tag 3 dybe åndedrag og drik vand</li>
+        <li>Erstat slik med mørk chokolade (70%+), nødder eller frugt-snacks</li>
+        <li>Læg dato-bolde, nødde-mix eller riskiks i kurven som "den søde nødhjælp"</li>
+        <li>Reglen: slik er aldrig på listen — skal du aktivt beslutte det</li>
+      </ul>
+    </div>
+
+    <div class="tip-card blue">
+      <h3>💧 Drik mere vand</h3>
+      <ul>
+        <li>Sult og tørst føles ens — drik et glas vand og vent 10 min</li>
+        <li>Køb altid en flaske vand til turen i butikken</li>
+        <li>Smag til med citron, mynte eller agurk hvis du synes vand er kedeligt</li>
+        <li>Undgå sodavand, juice og energidrikke — tomt kalorieindtag</li>
+      </ul>
+    </div>
+
+    <div class="tip-card purple">
+      <h3>🧠 Mental strategi</h3>
+      <ul>
+        <li>Lav altid en liste <em>inden</em> du tager af sted — og hold dig til den</li>
+        <li>Sæt et budget og brug pris-feltet til at estimere inden kassen</li>
+        <li>"En-ind, en-ud"-reglen: køber du noget nyt, fjerner du noget gammelt</li>
+        <li>Planlæg ugens aftensmad på forhånd — du køber kun det du skal bruge</li>
+        <li>Handle om formiddagen: færre mennesker = mindre stress = bedre valg</li>
+      </ul>
+    </div>
+
+    <div class="tip-card red">
+      <h3>🚫 Undgå faldgruberne</h3>
+      <ul>
+        <li>Tilbud er kun gode hvis du <em>skulle</em> købe varen alligevel</li>
+        <li>Familiepakker er ikke billigere pr. gram hvis du smider halvdelen ud</li>
+        <li>Undgå kasselinjen-snacks — de er placeret der med vilje</li>
+        <li>"Sund" på forsiden betyder ikke nødvendigvis sundt — læs bagsiden</li>
+        <li>Undgå at handle i weekenden hvis du kan: dyrere og mere stressfuldt</li>
+      </ul>
+    </div>
+
+    <div class="tip-card teal">
+      <h3>🌿 Billigere og sundere</h3>
+      <ul>
+        <li>Sæsongrøntsager er billigst og mest næringsrige</li>
+        <li>Linser, bønner og kikærter: billigt protein til under 10 kr/portion</li>
+        <li>Kog større portioner og frys ned — sparer tid og penge</li>
+        <li>Supermarkedernes egne mærker er ofte identiske med de dyre — test det</li>
+        <li>Kig på prisen pr. kg/liter, ikke pris pr. pakke</li>
+      </ul>
+    </div>
+
+    <div class="tip-add-card">
+      <h3>✏️ Tilføj dit eget tip</h3>
+      <input type="text" id="tip-title" placeholder="Titel på råd..." />
+      <textarea id="tip-body" placeholder="Skriv dit råd her..."></textarea>
+      <button class="btn" onclick="addCustomTip()">Gem råd</button>
+    </div>
+
+    <div id="custom-tips"></div>
+  </div>
+</div>
+
+<script>
+  // ---- State ----
+  let items = JSON.parse(localStorage.getItem('shopping_items') || '[]');
+  let customTips = JSON.parse(localStorage.getItem('custom_tips') || '[]');
+
+  function save() {
+    localStorage.setItem('shopping_items', JSON.stringify(items));
+  }
+  function saveTips() {
+    localStorage.setItem('custom_tips', JSON.stringify(customTips));
+  }
+
+  // ---- Tabs ----
+  function showTab(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  // ---- Items ----
+  function addItem() {
+    const inp = document.getElementById('new-item');
+    const val = inp.value.trim();
+    if (!val) return;
+    items.unshift({ id: Date.now(), name: val, checked: false, price: '' });
+    save();
+    render();
+    inp.value = '';
+    inp.focus();
+  }
+
+  function importList() {
+    const text = document.getElementById('import-text').value.trim();
+    if (!text) return;
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    lines.reverse().forEach(line => {
+      items.unshift({ id: Date.now() + Math.random(), name: line, checked: false, price: '' });
+    });
+    save();
+    render();
+    document.getElementById('import-text').value = '';
+  }
+
+  function toggleItem(id) {
+    const item = items.find(i => i.id === id);
+    if (item) { item.checked = !item.checked; save(); render(); }
+  }
+
+  function deleteItem(id) {
+    items = items.filter(i => i.id !== id);
+    save();
+    render();
+  }
+
+  function updatePrice(id, val) {
+    const item = items.find(i => i.id === id);
+    if (item) { item.price = val; save(); renderSummary(); }
+  }
+
+  function clearChecked() {
+    if (!items.some(i => i.checked)) return;
+    if (!confirm('Fjern alle afkrydsede varer?')) return;
+    items = items.filter(i => !i.checked);
+    save();
+    render();
+  }
+
+  function clearAll() {
+    if (!items.length) return;
+    if (!confirm('Ryd hele listen?')) return;
+    items = [];
+    save();
+    render();
+  }
+
+  // ---- Render ----
+  function renderSummary() {
+    const total = items.length;
+    const checked = items.filter(i => i.checked).length;
+    const price = items.reduce((s, i) => {
+      const p = parseFloat(i.price);
+      return s + (isNaN(p) ? 0 : p);
+    }, 0);
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-checked').textContent = checked;
+    document.getElementById('stat-price').textContent = price > 0 ? price.toFixed(0) + ' kr' : '— kr';
+    const pct = total > 0 ? (checked / total * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-lbl').textContent = `${checked} af ${total} varer i kurven`;
+    document.getElementById('item-count').textContent = total;
+  }
+
+  function render() {
+    const list = document.getElementById('item-list');
+    const empty = document.getElementById('empty-state');
+
+    if (items.length === 0) {
+      list.innerHTML = '';
+      empty.style.display = 'block';
+      renderSummary();
+      return;
+    }
+    empty.style.display = 'none';
+
+    // Sort: unchecked first
+    const sorted = [...items].sort((a, b) => (a.checked ? 1 : 0) - (b.checked ? 1 : 0));
+
+    list.innerHTML = sorted.map(item => `
+      <div class="item ${item.checked ? 'checked' : ''}" id="item-${item.id}">
+        <div class="item-checkbox ${item.checked ? 'checked' : ''}" onclick="toggleItem(${item.id})">
+          ${item.checked ? '✓' : ''}
+        </div>
+        <div class="item-body">
+          <div class="item-name">${escHtml(item.name)}</div>
+        </div>
+        <div class="item-price-wrap">
+          <input type="number" min="0" step="0.5" placeholder="pris"
+            value="${escHtml(item.price)}"
+            onchange="updatePrice(${item.id}, this.value)"
+            oninput="updatePrice(${item.id}, this.value)" />
+          <span>kr</span>
+        </div>
+        <button class="item-del" onclick="deleteItem(${item.id})" title="Slet">✕</button>
+      </div>
+    `).join('');
+
+    renderSummary();
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ---- Custom tips ----
+  function addCustomTip() {
+    const title = document.getElementById('tip-title').value.trim();
+    const body  = document.getElementById('tip-body').value.trim();
+    if (!title || !body) return;
+    customTips.push({ id: Date.now(), title, body });
+    saveTips();
+    renderCustomTips();
+    document.getElementById('tip-title').value = '';
+    document.getElementById('tip-body').value = '';
+  }
+
+  function deleteCustomTip(id) {
+    customTips = customTips.filter(t => t.id !== id);
+    saveTips();
+    renderCustomTips();
+  }
+
+  function renderCustomTips() {
+    const el = document.getElementById('custom-tips');
+    el.innerHTML = customTips.map(t => `
+      <div class="tip-card custom-tip" style="margin-top:0;border-left-color:#F6AD55;background:#fff8e1;position:relative">
+        <h3>📝 ${escHtml(t.title)}</h3>
+        <p style="font-size:.88rem;color:#4a5568;line-height:1.5">${escHtml(t.body).replace(/\n/g,'<br>')}</p>
+        <button onclick="deleteCustomTip(${t.id})"
+          style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;color:#CBD5E0;font-size:1.1rem"
+          title="Slet råd">✕</button>
+      </div>
+    `).join('');
+  }
+
+  // ---- Init ----
+  render();
+  renderCustomTips();
+</script>
+</body>
+</html>
