@@ -328,6 +328,66 @@
       padding: 6px 4px 4px;
       font-weight: 600;
     }
+
+    /* --- AUTOCOMPLETE --- */
+    .autocomplete-wrap { position: relative; flex: 1; }
+    .autocomplete-wrap input { width: 100%; }
+    .autocomplete-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: white;
+      border: 2px solid var(--primary);
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      z-index: 200;
+      overflow: hidden;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .autocomplete-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.92rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background: #f0faf5; }
+    .autocomplete-price { font-size: 0.78rem; color: var(--muted); }
+
+    /* --- GEMTE LISTER --- */
+    .save-list-area {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .save-list-area h3 { font-size: 0.88rem; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .saved-list-card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .saved-list-info { flex: 1; min-width: 0; }
+    .saved-list-name { font-size: 0.95rem; font-weight: 600; }
+    .saved-list-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .saved-list-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .price-memory-hint {
+      font-size: 0.75rem;
+      color: var(--primary);
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -367,7 +427,13 @@
   </div>
 
   <div class="input-row">
-    <input type="text" id="new-item" placeholder="Tilføj vare..." onkeydown="if(event.key==='Enter') addItem()" />
+    <div class="autocomplete-wrap">
+      <input type="text" id="new-item" placeholder="Tilføj vare..."
+        onkeydown="handleNewItemKey(event)"
+        oninput="showSuggestions(this.value)"
+        autocomplete="off" />
+      <div class="autocomplete-list" id="autocomplete-list" style="display:none"></div>
+    </div>
     <button class="btn" onclick="addItem()">Tilføj</button>
   </div>
 
@@ -378,6 +444,15 @@
       <button class="btn" onclick="importList()">Importer</button>
       <button class="btn secondary" onclick="document.getElementById('import-text').value=''">Ryd</button>
     </div>
+  </div>
+
+  <div class="save-list-area">
+    <h3>Gem / hent liste</h3>
+    <div class="input-row" style="margin-bottom:10px">
+      <input type="text" id="save-name" placeholder="Navn på listen (fx 'Ugens mad')..." style="flex:1;padding:9px 12px;border:2px solid var(--border);border-radius:10px;font-size:0.9rem;outline:none" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'" onkeydown="if(event.key==='Enter') saveList()" />
+      <button class="btn" onclick="saveList()">Gem liste</button>
+    </div>
+    <div id="saved-lists"></div>
   </div>
 
   <div class="list-header">
@@ -479,15 +554,15 @@
 
 <script>
   // ---- State ----
-  let items = JSON.parse(localStorage.getItem('shopping_items') || '[]');
-  let customTips = JSON.parse(localStorage.getItem('custom_tips') || '[]');
+  let items      = JSON.parse(localStorage.getItem('shopping_items') || '[]');
+  let customTips = JSON.parse(localStorage.getItem('custom_tips')    || '[]');
+  let priceBook  = JSON.parse(localStorage.getItem('price_book')     || '{}');
+  let savedLists = JSON.parse(localStorage.getItem('saved_lists')    || '[]');
 
-  function save() {
-    localStorage.setItem('shopping_items', JSON.stringify(items));
-  }
-  function saveTips() {
-    localStorage.setItem('custom_tips', JSON.stringify(customTips));
-  }
+  function save()           { localStorage.setItem('shopping_items', JSON.stringify(items)); }
+  function saveTips()       { localStorage.setItem('custom_tips',    JSON.stringify(customTips)); }
+  function savePriceBook()  { localStorage.setItem('price_book',     JSON.stringify(priceBook)); }
+  function saveSavedLists() { localStorage.setItem('saved_lists',    JSON.stringify(savedLists)); }
 
   // ---- Tabs ----
   function showTab(name) {
@@ -497,15 +572,54 @@
     event.currentTarget.classList.add('active');
   }
 
+  // ---- Autocomplete ----
+  function normKey(s) { return s.trim().toLowerCase(); }
+
+  function showSuggestions(val) {
+    const list = document.getElementById('autocomplete-list');
+    const q = normKey(val);
+    if (!q) { list.style.display = 'none'; return; }
+    const matches = Object.entries(priceBook)
+      .filter(([k]) => k.includes(q))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(0, 6);
+    if (!matches.length) { list.style.display = 'none'; return; }
+    list.innerHTML = matches.map(([k, p]) => `
+      <div class="autocomplete-item" onmousedown="pickSuggestion('${escHtml(k)}')">
+        <span>${escHtml(k)}</span>
+        ${p ? `<span class="autocomplete-price">${p} kr</span>` : ''}
+      </div>
+    `).join('');
+    list.style.display = 'block';
+  }
+
+  function pickSuggestion(name) {
+    document.getElementById('new-item').value = name;
+    document.getElementById('autocomplete-list').style.display = 'none';
+    addItem();
+  }
+
+  function handleNewItemKey(e) {
+    if (e.key === 'Enter') { addItem(); }
+    if (e.key === 'Escape') { document.getElementById('autocomplete-list').style.display = 'none'; }
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.autocomplete-wrap'))
+      document.getElementById('autocomplete-list').style.display = 'none';
+  });
+
   // ---- Items ----
   function addItem() {
     const inp = document.getElementById('new-item');
     const val = inp.value.trim();
     if (!val) return;
-    items.unshift({ id: Date.now(), name: val, checked: false, price: '' });
+    const rememberedPrice = priceBook[normKey(val)] || '';
+    items.unshift({ id: Date.now(), name: val, checked: false, price: rememberedPrice });
     save();
     render();
     inp.value = '';
+    document.getElementById('autocomplete-list').style.display = 'none';
     inp.focus();
   }
 
@@ -514,7 +628,8 @@
     if (!text) return;
     const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     lines.reverse().forEach(line => {
-      items.unshift({ id: Date.now() + Math.random(), name: line, checked: false, price: '' });
+      const rememberedPrice = priceBook[normKey(line)] || '';
+      items.unshift({ id: Date.now() + Math.random(), name: line, checked: false, price: rememberedPrice });
     });
     save();
     render();
@@ -534,7 +649,15 @@
 
   function updatePrice(id, val) {
     const item = items.find(i => i.id === id);
-    if (item) { item.price = val; save(); renderSummary(); }
+    if (!item) return;
+    item.price = val;
+    save();
+    // Remember price for this item name
+    if (val && parseFloat(val) > 0) {
+      priceBook[normKey(item.name)] = val;
+      savePriceBook();
+    }
+    renderSummary();
   }
 
   function clearChecked() {
@@ -553,7 +676,61 @@
     render();
   }
 
-  // ---- Render ----
+  // ---- Gemte lister ----
+  function saveList() {
+    if (!items.length) { alert('Listen er tom — tilføj varer først.'); return; }
+    const nameInp = document.getElementById('save-name');
+    const name = nameInp.value.trim() || 'Liste ' + new Date().toLocaleDateString('da-DK');
+    const snapshot = items.map(i => ({ ...i, checked: false })); // gem som ny liste
+    savedLists.unshift({ id: Date.now(), name, date: new Date().toLocaleDateString('da-DK'), items: snapshot });
+    saveSavedLists();
+    renderSavedLists();
+    nameInp.value = '';
+  }
+
+  function loadList(id) {
+    if (items.length && !confirm('Det vil erstatte din nuværende liste. Fortsæt?')) return;
+    const saved = savedLists.find(l => l.id === id);
+    if (!saved) return;
+    // Restore prices from priceBook for any items without price
+    items = saved.items.map(i => ({
+      ...i,
+      id: Date.now() + Math.random(),
+      checked: false,
+      price: i.price || priceBook[normKey(i.name)] || ''
+    }));
+    save();
+    render();
+  }
+
+  function deleteSavedList(id) {
+    if (!confirm('Slet denne gemte liste?')) return;
+    savedLists = savedLists.filter(l => l.id !== id);
+    saveSavedLists();
+    renderSavedLists();
+  }
+
+  function renderSavedLists() {
+    const el = document.getElementById('saved-lists');
+    if (!savedLists.length) {
+      el.innerHTML = '<p style="font-size:0.82rem;color:var(--muted);padding:2px 0">Ingen gemte lister endnu.</p>';
+      return;
+    }
+    el.innerHTML = savedLists.map(l => `
+      <div class="saved-list-card">
+        <div class="saved-list-info">
+          <div class="saved-list-name">${escHtml(l.name)}</div>
+          <div class="saved-list-meta">${l.date} &middot; ${l.items.length} varer</div>
+        </div>
+        <div class="saved-list-actions">
+          <button class="btn secondary" style="padding:6px 12px;font-size:0.8rem" onclick="loadList(${l.id})">Hent</button>
+          <button class="btn danger"    style="padding:6px 12px;font-size:0.8rem" onclick="deleteSavedList(${l.id})">Slet</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ---- Render summary ----
   function renderSummary() {
     const total = items.length;
     const checked = items.filter(i => i.checked).length;
@@ -571,9 +748,8 @@
   }
 
   function render() {
-    const list = document.getElementById('item-list');
+    const list  = document.getElementById('item-list');
     const empty = document.getElementById('empty-state');
-
     if (items.length === 0) {
       list.innerHTML = '';
       empty.style.display = 'block';
@@ -581,29 +757,31 @@
       return;
     }
     empty.style.display = 'none';
-
-    // Sort: unchecked first
     const sorted = [...items].sort((a, b) => (a.checked ? 1 : 0) - (b.checked ? 1 : 0));
-
-    list.innerHTML = sorted.map(item => `
-      <div class="item ${item.checked ? 'checked' : ''}" id="item-${item.id}">
-        <div class="item-checkbox ${item.checked ? 'checked' : ''}" onclick="toggleItem(${item.id})">
-          ${item.checked ? '✓' : ''}
+    list.innerHTML = sorted.map(item => {
+      const remembered = priceBook[normKey(item.name)];
+      const hint = (!item.price && remembered)
+        ? `<div class="price-memory-hint">Husket: ${remembered} kr</div>` : '';
+      return `
+        <div class="item ${item.checked ? 'checked' : ''}">
+          <div class="item-checkbox ${item.checked ? 'checked' : ''}" onclick="toggleItem(${item.id})">
+            ${item.checked ? '✓' : ''}
+          </div>
+          <div class="item-body">
+            <div class="item-name">${escHtml(item.name)}</div>
+            ${hint}
+          </div>
+          <div class="item-price-wrap">
+            <input type="number" min="0" step="0.5" placeholder="pris"
+              value="${escHtml(item.price)}"
+              onchange="updatePrice(${item.id}, this.value)"
+              oninput="updatePrice(${item.id}, this.value)" />
+            <span>kr</span>
+          </div>
+          <button class="item-del" onclick="deleteItem(${item.id})" title="Slet">✕</button>
         </div>
-        <div class="item-body">
-          <div class="item-name">${escHtml(item.name)}</div>
-        </div>
-        <div class="item-price-wrap">
-          <input type="number" min="0" step="0.5" placeholder="pris"
-            value="${escHtml(item.price)}"
-            onchange="updatePrice(${item.id}, this.value)"
-            oninput="updatePrice(${item.id}, this.value)" />
-          <span>kr</span>
-        </div>
-        <button class="item-del" onclick="deleteItem(${item.id})" title="Slet">✕</button>
-      </div>
-    `).join('');
-
+      `;
+    }).join('');
     renderSummary();
   }
 
@@ -649,6 +827,7 @@
   // ---- Init ----
   render();
   renderCustomTips();
+  renderSavedLists();
 </script>
 </body>
 </html>
